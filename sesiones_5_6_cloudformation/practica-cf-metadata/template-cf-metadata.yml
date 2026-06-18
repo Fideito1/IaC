@@ -217,6 +217,13 @@ Resources:
               mode: '000400'
               owner: root
               group: root
+            /home/ec2-user/raquel.txt:
+              content: |
+                Raquel Esteve Sanjuan
+                Practica CloudFormation Metadata
+              mode: '000644'
+              owner: ec2-user
+              group: ec2-user
             /etc/cfn/cfn-hup.conf:
               content: !Sub |
                 [main]
