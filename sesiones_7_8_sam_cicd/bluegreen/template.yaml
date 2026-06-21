@@ -55,7 +55,7 @@ Resources:
       AutoPublishAlias: !Ref Stage
       Handler: handler.handler
       CodeUri: ./src/apifunction/
-      Runtime: nodejs22.x
+      Runtime: nodejs18.x
       Architectures:
         - x86_64
       MemorySize: 128

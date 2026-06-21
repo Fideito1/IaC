@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Ejemplo de aplicacion web para desplegar una API REST con AWS SAM
+Transform:
+- AWS::Serverless-2016-10-31
+Parameters:
+  Stage:
+    Type: String
+    AllowedValues:
+    - staging
+    - production
+    Default: staging
+  ApiName:
+    Type: String
+    Default: sam-cefire
+Resources:
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name:
+        Fn::Sub: ${ApiName}-${Stage}
+      StageName:
+        Ref: Stage
+      Variables:
+        LAMBDA_ALIAS:
+          Ref: Stage
+  CanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Alarma para detecci\xF3n de problemas en Canary"
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${lambdaFunction}:${Stage}
+      - Name: FunctionName
+        Value:
+          Ref: lambdaFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - lambdaFunction
+          - Version.Version
+  lambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role:
+        Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/LabRole
+      FunctionName:
+        Fn::Sub: ${Stage}-cefire-sam-main
+      AutoPublishAlias:
+        Ref: Stage
+      Handler: handler.handler
+      CodeUri: lambdaFunction
+      Runtime: nodejs18.x
+      Architectures:
+      - x86_64
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          tableName:
+            Ref: SampleTable
+          stage:
+            Ref: Stage
+      DeploymentPreference:
+        Type: Linear10PercentEvery1Minute
+        Role:
+          Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/LabRole
+        Alarms:
+        - Ref: CanaryErrorsAlarm
+      Events:
+        ProxyApiRoot:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /
+            Method: ANY
+        ProxyApiGreedy:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /{proxy+}
+            Method: ANY
+    Metadata:
+      SamResourceId: lambdaFunction
+  SampleTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName:
+        Fn::Sub: ${Stage}-cefire-sam-tabla
+      PrimaryKey:
+        Name: PK
+        Type: String
+Globals:
+  Function:
+    Tags:
+      project: cefire-sam
+      environment:
+        Ref: Stage
+  Api:
+    OpenApiVersion: 3.0.1
+    Cors:
+      AllowMethods: '''GET,POST,PUT,OPTIONS'''
+      AllowHeaders: '''content-type'''
+      AllowOrigin: '''*'''
+Outputs:
+  ApiEndpoint:
+    Description: URL de la API
+    Value:
+      Fn::Sub: https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/
+  DynamoDBTable:
+    Description: Tabla DynamoDB
+    Value:
+      Ref: SampleTable
